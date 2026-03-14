@@ -1,5 +1,5 @@
 ---
-name: weather
+name: weather.py
 description: Get weather data from WeatherAPI.com. Use when the user asks about current weather conditions, forecasts, temperature, precipitation, or wants to know if they need an umbrella. Supports any location worldwide via city name, zip code, coordinates, or IP-based lookup.
 compatibility: Requires 'weather.py' script in PATH with WEATHER_API_KEY environment variable set.
 ---
