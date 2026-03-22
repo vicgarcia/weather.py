@@ -190,7 +190,7 @@ This project includes a `SKILL.md` file for use with AI coding agents (Claude Co
 mkdir -p /path/to/agent/skills
 
 # Copy SKILL.md
-cp /path/to/weather.py/SKILL.md /path/to/agent/skills/weather.py/SKILL.md
+cp /path/to/weather.py/SKILL.md /path/to/agent/skills/weather/SKILL.md
 
 # Ensure weather.py is in PATH (see installation above)
 

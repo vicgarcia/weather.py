@@ -24,6 +24,8 @@ Examples:
   weather.py current --location "51.5,-0.1"
   weather.py forecast --location "London" --days 7
   weather.py forecast --location "Tokyo" --days 5 --alerts --hourly
+  weather.py history --location "London" --date 2024-01-15
+  weather.py history --location "NYC" --date 2024-06-01 --hourly
 
 Location formats supported:
   - City name: "London", "New York"
@@ -94,6 +96,11 @@ class WeatherClient:
             "alerts": "yes" if alerts else "no",
         }
         return self._request("forecast.json", params)
+
+    def get_history(self, location: str, date: str) -> dict[str, Any]:
+        '''Get historical weather for a location and date.'''
+        params = {"q": location, "dt": date}
+        return self._request("history.json", params)
 
 
 def format_location(loc: dict[str, Any]) -> str:
@@ -374,6 +381,115 @@ def cmd_forecast(client: WeatherClient, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_history(client: WeatherClient, args: argparse.Namespace) -> int:
+    '''Display historical weather for a date.'''
+    try:
+        data = client.get_history(args.location, args.date)
+    except WeatherAPIError as e:
+        print(f"Error: {e}")
+        return 1
+
+    loc = data.get("location", {})
+    forecast = data.get("forecast", {})
+    forecastdays = forecast.get("forecastday", [])
+
+    if not forecastdays:
+        print("No historical data available for this date.")
+        return 1
+
+    day_data = forecastdays[0]
+    date_str = day_data.get("date", args.date)
+    day = day_data.get("day", {})
+    astro = day_data.get("astro", {})
+
+    # Parse date for display
+    try:
+        date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+        day_name = date_obj.strftime("%A")
+        date_display = date_obj.strftime("%B %d, %Y")
+    except ValueError:
+        day_name = ""
+        date_display = date_str
+
+    # Header
+    print(f"\nHistorical Weather for {format_location(loc)}")
+    print(f"{day_name}, {date_display}")
+    print("=" * 60)
+
+    # Condition
+    day_condition = day.get("condition", {}).get("text", "Unknown")
+    print(f"  Condition:     {day_condition}")
+
+    # Temperature
+    max_f = day.get("maxtemp_f", 0)
+    min_f = day.get("mintemp_f", 0)
+    max_c = day.get("maxtemp_c", 0)
+    min_c = day.get("mintemp_c", 0)
+    avg_f = day.get("avgtemp_f", 0)
+    avg_c = day.get("avgtemp_c", 0)
+    print(f"  High:          {max_f}°F ({max_c}°C)")
+    print(f"  Low:           {min_f}°F ({min_c}°C)")
+    print(f"  Average:       {avg_f}°F ({avg_c}°C)")
+
+    # Wind
+    max_wind = day.get("maxwind_mph", 0)
+    max_wind_kph = day.get("maxwind_kph", 0)
+    print(f"  Max Wind:      {max_wind} mph ({max_wind_kph} km/h)")
+
+    # Humidity
+    avg_humidity = day.get("avghumidity", 0)
+    print(f"  Humidity:      {avg_humidity}%")
+
+    # Precipitation
+    precip_in = day.get("totalprecip_in", 0)
+    precip_mm = day.get("totalprecip_mm", 0)
+    if precip_in > 0:
+        print(f"  Precipitation: {precip_in} in ({precip_mm} mm)")
+    else:
+        print(f"  Precipitation: None")
+
+    # Visibility
+    avg_vis_miles = day.get("avgvis_miles", 0)
+    avg_vis_km = day.get("avgvis_km", 0)
+    print(f"  Visibility:    {avg_vis_miles} mi ({avg_vis_km} km)")
+
+    # UV Index
+    uv = day.get("uv", 0)
+    print(f"  UV Index:      {uv} ({get_uv_level(uv)})")
+
+    # Sunrise/sunset
+    sunrise = astro.get("sunrise", "")
+    sunset = astro.get("sunset", "")
+    if sunrise and sunset:
+        print(f"  Sun:           {sunrise} - {sunset}")
+
+    # Hourly breakdown (if requested)
+    if args.hourly:
+        hours = day_data.get("hour", [])
+        print()
+        print("  Hourly Breakdown:")
+        print("  " + "-" * 56)
+
+        for hour_data in hours:
+            hour_time = hour_data.get("time", "")
+            try:
+                hour_obj = datetime.strptime(hour_time, "%Y-%m-%d %H:%M")
+            except ValueError:
+                continue
+
+            temp_f = hour_data.get("temp_f", 0)
+            condition = hour_data.get("condition", {}).get("text", "")
+            wind_mph = hour_data.get("wind_mph", 0)
+            precip = hour_data.get("precip_in", 0)
+
+            time_display = hour_obj.strftime("%I %p").lstrip("0")
+            precip_str = f" | Precip: {precip} in" if precip > 0 else ""
+            print(f"    {time_display:>5}: {temp_f:>3.0f}°F  {condition:<18} Wind: {wind_mph:.0f} mph{precip_str}")
+
+    print("=" * 60)
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Weather CLI - Get weather data from WeatherAPI.com",
@@ -430,6 +546,24 @@ def main() -> int:
         help="Include hourly forecast for today"
     )
 
+    # History command
+    history_parser = subparsers.add_parser("history", help="Get historical weather")
+    history_parser.add_argument(
+        "--location", "-l",
+        required=True,
+        help="Location (city name, zip code, coordinates, or 'auto' for IP lookup)"
+    )
+    history_parser.add_argument(
+        "--date", "-d",
+        required=True,
+        help="Date in YYYY-MM-DD format (from 2010-01-01 onwards)"
+    )
+    history_parser.add_argument(
+        "--hourly",
+        action="store_true",
+        help="Include hourly breakdown"
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -451,6 +585,8 @@ def main() -> int:
         return cmd_current(client, args)
     elif args.command == "forecast":
         return cmd_forecast(client, args)
+    elif args.command == "history":
+        return cmd_history(client, args)
     else:
         parser.print_help()
         return 1
