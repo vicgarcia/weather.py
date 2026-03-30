@@ -91,7 +91,7 @@ class WeatherClient:
         '''Get weather forecast for a location.'''
         params = {
             "q": location,
-            "days": min(max(days, 1), 14),  # clamp to 1-14
+            "days": min(max(days, 1), 7),  # clamp to 1-7
             "aqi": "yes" if aqi else "no",
             "alerts": "yes" if alerts else "no",
         }
@@ -528,7 +528,7 @@ def main() -> int:
         "--days", "-d",
         type=int,
         default=3,
-        help="Number of forecast days (1-14, default: 3)"
+        help="Number of forecast days (1-7, default: 3)"
     )
     forecast_parser.add_argument(
         "--aqi",
