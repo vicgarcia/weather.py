@@ -177,9 +177,7 @@ def cmd_current(client: WeatherClient, args: argparse.Namespace) -> int:
     current = data.get("current", {})
     condition = current.get("condition", {})
 
-    # Header
-    print(f"\nCurrent Weather for {format_location(loc)}")
-    print("=" * 60)
+    print(f"  Current Weather for {format_location(loc)}")
 
     # Local time
     localtime = loc.get("localtime", "")
@@ -237,7 +235,7 @@ def cmd_current(client: WeatherClient, args: argparse.Namespace) -> int:
         print(f"    PM2.5:       {pm25:.1f} µg/m³")
         print(f"    PM10:        {pm10:.1f} µg/m³")
 
-    print("=" * 60)
+
     return 0
 
 
@@ -258,17 +256,6 @@ def cmd_forecast(client: WeatherClient, args: argparse.Namespace) -> int:
     current = data.get("current", {})
     forecast = data.get("forecast", {})
     alerts = data.get("alerts", {}).get("alert", [])
-
-    # Header
-    print(f"\n{args.days}-Day Forecast for {format_location(loc)}")
-    print("=" * 70)
-
-    # Current conditions summary
-    condition = current.get("condition", {})
-    temp_f = current.get("temp_f", 0)
-    temp_c = current.get("temp_c", 0)
-    print(f"  Now: {condition.get('text', 'Unknown')} | {temp_f}°F ({temp_c}°C)")
-    print()
 
     # Weather alerts
     if args.alerts and alerts:
@@ -318,35 +305,37 @@ def cmd_forecast(client: WeatherClient, args: argparse.Namespace) -> int:
         # Total precipitation
         precip_in = day.get("totalprecip_in", 0)
 
-        print(f"  {day_name}, {date_display}")
-        print(f"    {day_condition}")
-        print(f"    High: {max_f}°F ({max_c}°C)  |  Low: {min_f}°F ({min_c}°C)")
+        print(f"  {day_name}, {date_display} - Forecast")
+        print(f"  Condition:     {day_condition}")
+        print(f"  High:          {max_f}°F ({max_c}°C)")
+        print(f"  Low:           {min_f}°F ({min_c}°C)")
 
         if rain_chance > 0 or snow_chance > 0:
-            precip_str = []
+            chance_parts = []
             if rain_chance > 0:
-                precip_str.append(f"Rain: {rain_chance}%")
+                chance_parts.append(f"Rain: {rain_chance}%")
             if snow_chance > 0:
-                precip_str.append(f"Snow: {snow_chance}%")
-            print(f"    Chance: {' | '.join(precip_str)}")
+                chance_parts.append(f"Snow: {snow_chance}%")
+            print(f"  Chance:        {' | '.join(chance_parts)}")
 
         if precip_in > 0:
-            print(f"    Expected: {precip_in} in")
+            print(f"  Precipitation: {precip_in} in")
 
         # Wind and humidity
         max_wind = day.get("maxwind_mph", 0)
         avg_humidity = day.get("avghumidity", 0)
-        print(f"    Wind: up to {max_wind} mph  |  Humidity: {avg_humidity}%")
+        print(f"  Max Wind:      {max_wind} mph")
+        print(f"  Humidity:      {avg_humidity}%")
 
         # UV
         uv = day.get("uv", 0)
-        print(f"    UV Index: {uv} ({get_uv_level(uv)})")
+        print(f"  UV Index:      {uv} ({get_uv_level(uv)})")
 
         # Sunrise/sunset
         sunrise = astro.get("sunrise", "")
         sunset = astro.get("sunset", "")
         if sunrise and sunset:
-            print(f"    Sun: {sunrise} - {sunset}")
+            print(f"  Sun:           {sunrise} - {sunset}")
 
         # Hourly breakdown for this day (if requested)
         if args.hourly:
@@ -354,6 +343,8 @@ def cmd_forecast(client: WeatherClient, args: argparse.Namespace) -> int:
             is_today = (day_idx == 0)
 
             print()
+            print("  Hourly Breakdown:")
+            print("  " + "-" * 56)
             for hour_data in hours:
                 hour_time = hour_data.get("time", "")
                 try:
@@ -373,11 +364,11 @@ def cmd_forecast(client: WeatherClient, args: argparse.Namespace) -> int:
 
                 time_display = hour_obj.strftime("%I %p").lstrip("0")
                 rain_str = f" | Rain: {rain_chance}%" if rain_chance > 0 else ""
-                print(f"      {time_display:>5}: {temp_f:>3.0f}°F  {condition:<18} Wind: {wind_mph:.0f} mph{rain_str}")
+                print(f"    {time_display:>5}: {temp_f:>3.0f}°F  {condition:<18} Wind: {wind_mph:.0f} mph{rain_str}")
 
         print()
 
-    print("=" * 70)
+
     return 0
 
 
@@ -411,10 +402,7 @@ def cmd_history(client: WeatherClient, args: argparse.Namespace) -> int:
         day_name = ""
         date_display = date_str
 
-    # Header
-    print(f"\nHistorical Weather for {format_location(loc)}")
-    print(f"{day_name}, {date_display}")
-    print("=" * 60)
+    print(f"  {day_name}, {date_display} - History")
 
     # Condition
     day_condition = day.get("condition", {}).get("text", "Unknown")
@@ -466,6 +454,12 @@ def cmd_history(client: WeatherClient, args: argparse.Namespace) -> int:
     # Hourly breakdown (if requested)
     if args.hourly:
         hours = day_data.get("hour", [])
+
+        # Check if the requested date is today (in the location's local time)
+        now = datetime.now()
+        is_today = (args.date == now.strftime("%Y-%m-%d"))
+        current_hour = now.hour
+
         print()
         print("  Hourly Breakdown:")
         print("  " + "-" * 56)
@@ -474,7 +468,12 @@ def cmd_history(client: WeatherClient, args: argparse.Namespace) -> int:
             hour_time = hour_data.get("time", "")
             try:
                 hour_obj = datetime.strptime(hour_time, "%Y-%m-%d %H:%M")
+                hour_num = hour_obj.hour
             except ValueError:
+                continue
+
+            # For today, skip hours that haven't elapsed yet
+            if is_today and hour_num >= current_hour:
                 continue
 
             temp_f = hour_data.get("temp_f", 0)
@@ -486,7 +485,7 @@ def cmd_history(client: WeatherClient, args: argparse.Namespace) -> int:
             precip_str = f" | Precip: {precip} in" if precip > 0 else ""
             print(f"    {time_display:>5}: {temp_f:>3.0f}°F  {condition:<18} Wind: {wind_mph:.0f} mph{precip_str}")
 
-    print("=" * 60)
+
     return 0
 
 
