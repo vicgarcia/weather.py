@@ -177,6 +177,7 @@ def cmd_current(client: WeatherClient, args: argparse.Namespace) -> int:
     current = data.get("current", {})
     condition = current.get("condition", {})
 
+    print()
     print(f"  Current Weather for {format_location(loc)}")
 
     # Local time
@@ -256,6 +257,8 @@ def cmd_forecast(client: WeatherClient, args: argparse.Namespace) -> int:
     current = data.get("current", {})
     forecast = data.get("forecast", {})
     alerts = data.get("alerts", {}).get("alert", [])
+
+    print()
 
     # Weather alerts
     if args.alerts and alerts:
@@ -402,6 +405,7 @@ def cmd_history(client: WeatherClient, args: argparse.Namespace) -> int:
         day_name = ""
         date_display = date_str
 
+    print()
     print(f"  {day_name}, {date_display} - History")
 
     # Condition
